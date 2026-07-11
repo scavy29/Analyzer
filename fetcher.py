@@ -41,6 +41,9 @@ class SessionArtifacts:
     console_logs: str = ""
     network_logs_har: dict = field(default_factory=dict)
     device_logs: str = ""
+    selenium_logs: str = ""
+    appium_logs: str = ""
+    crash_logs: str = ""
 
     fetch_errors: list = field(default_factory=list)
 
@@ -163,6 +166,38 @@ def fetch_device_logs(build_id: str, session_id: str) -> str:
         return ""
 
 
+def fetch_selenium_logs(session_id: str, platform: str = "automate") -> str:
+    """GET <base>/sessions/<session_id>/seleniumlogs - full Selenium wire log."""
+    url = f"{_base_for(platform)}/sessions/{session_id}/seleniumlogs"
+    try:
+        resp = _get(url)
+        return resp.text
+    except BrowserStackNotFoundError:
+        return ""
+
+
+def fetch_appium_logs(session_id: str, platform: str = "automate") -> str:
+    """GET <base>/sessions/<session_id>/appiumlogs - Appium server log."""
+    url = f"{_base_for(platform)}/sessions/{session_id}/appiumlogs"
+    try:
+        resp = _get(url)
+        return resp.text
+    except BrowserStackNotFoundError:
+        return ""
+
+
+def fetch_crash_logs(build_id: str, session_id: str) -> str:
+    """GET /app-automate/builds/<build_id>/sessions/<session_id>/crashlogs
+    Native crash reports - App Automate only.
+    """
+    url = f"{APP_AUTOMATE_BASE}/builds/{build_id}/sessions/{session_id}/crashlogs"
+    try:
+        resp = _get(url)
+        return resp.text
+    except BrowserStackNotFoundError:
+        return ""
+
+
 def fetch_all(session_id: str, build_id: Optional[str] = None,
               platform: str = "automate") -> SessionArtifacts:
     """
@@ -180,8 +215,15 @@ def fetch_all(session_id: str, build_id: Optional[str] = None,
         ("network_logs_har", lambda: fetch_network_logs(session_id, platform)),
     ]
 
-    if platform == "app_automate" and build_id:
-        steps.append(("device_logs", lambda: fetch_device_logs(build_id, session_id)))
+    if platform == "automate":
+        steps.append(("selenium_logs", lambda: fetch_selenium_logs(session_id, platform)))
+        steps.append(("appium_logs", lambda: fetch_appium_logs(session_id, platform)))
+
+    if platform == "app_automate":
+        steps.append(("appium_logs", lambda: fetch_appium_logs(session_id, platform)))
+        if build_id:
+            steps.append(("device_logs", lambda: fetch_device_logs(build_id, session_id)))
+            steps.append(("crash_logs", lambda: fetch_crash_logs(build_id, session_id)))
 
     for field_name, fn in steps:
         try:

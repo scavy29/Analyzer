@@ -41,6 +41,7 @@ class Signals:
     failed_requests: List[Dict[str, Any]] = field(default_factory=list)
     slow_requests: List[Dict[str, Any]] = field(default_factory=list)
     device_log_errors: List[str] = field(default_factory=list)
+    crash_log_errors: List[str] = field(default_factory=list)
 
     fetch_errors: List[str] = field(default_factory=list)
 
@@ -56,6 +57,7 @@ class Signals:
             "failed_requests": self.failed_requests[:50],
             "slow_requests": self.slow_requests[:30],
             "device_log_errors": self.device_log_errors[:100],
+            "crash_log_errors": self.crash_log_errors[:50],
             "fetch_errors": self.fetch_errors,
         }
 
@@ -123,6 +125,20 @@ def _parse_device_logs(signals: Signals, device_logs: str):
             signals.device_log_errors.append(line.strip())
 
 
+def _parse_crash_logs(signals: Signals, crash_logs: str):
+    """Native crash reports look different from regular error logs -
+    FATAL EXCEPTION / SIGSEGV / ANR / backtrace markers rather than plain ERROR lines."""
+    if not crash_logs:
+        return
+    for line in crash_logs.splitlines():
+        upper = line.upper()
+        if any(marker in upper for marker in
+               ("FATAL", "SIGSEGV", "SIGABRT", "ANR", "EXCEPTION", "BACKTRACE")):
+            signals.crash_log_errors.append(line.strip())
+            if len(signals.crash_log_errors) >= 50:
+                return
+
+
 def extract_signals(artifacts: SessionArtifacts) -> Signals:
     """Main entry point: raw SessionArtifacts -> structured Signals."""
     signals = Signals()
@@ -130,8 +146,11 @@ def extract_signals(artifacts: SessionArtifacts) -> Signals:
 
     _parse_metadata(signals, artifacts.metadata)
     _parse_text_logs(signals, artifacts.text_logs)
+    _parse_text_logs(signals, artifacts.selenium_logs)
+    _parse_text_logs(signals, artifacts.appium_logs)
     _parse_console_logs(signals, artifacts.console_logs)
     _parse_network_logs(signals, artifacts.network_logs_har)
     _parse_device_logs(signals, artifacts.device_logs)
+    _parse_crash_logs(signals, artifacts.crash_logs)
 
     return signals
