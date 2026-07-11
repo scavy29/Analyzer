@@ -79,6 +79,13 @@ Rules:
 - If the signals are too sparse to diagnose confidently, populate \
   additional_logs_needed with what specifically would help, instead of \
   guessing.
+- You may be given a "Focus area" describing a specific symptom someone \
+  (e.g. a customer) reported. Treat it as a HYPOTHESIS TO VERIFY against the \
+  evidence, not as a fact to confirm. Explicitly state in detailed_analysis \
+  whether the logs support, contradict, or are silent on that reported \
+  symptom. If the evidence points to a different root cause than the \
+  reported symptom suggests, say so plainly rather than forcing a match. \
+  Still prioritize signals relevant to the focus area when there is one.
 - Respond ONLY with valid JSON, no markdown fences, matching this schema:
 {
   "category": "<one of the categories above>",
@@ -108,13 +115,21 @@ class Verdict:
     raw_error: str = ""
 
 
-def analyze(signals: Signals) -> Verdict:
+def analyze(signals: Signals, focus_area: str = "") -> Verdict:
     payload = json.dumps(signals.to_dict(), indent=2)
+
+    if focus_area:
+        contents = (
+            f'Focus area (reported symptom to verify, not assume): "{focus_area}"\n\n'
+            f"Session signals (JSON):\n{payload}"
+        )
+    else:
+        contents = payload
 
     try:
         response = CLIENT.models.generate_content(
             model=MODEL,
-            contents=payload,
+            contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
                 max_output_tokens=8192,

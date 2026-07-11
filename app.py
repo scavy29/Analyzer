@@ -22,6 +22,12 @@ with st.form("session_form"):
         "Session URL",
         placeholder="https://automate.browserstack.com/dashboard/v2/builds/<build_id>/sessions/<session_id>",
     )
+    focus_area = st.text_area(
+        "What to look for particularly (optional)",
+        placeholder="e.g. Customer reports the device rotates to landscape even though "
+                    "orientation is explicitly set to portrait.",
+        height=80,
+    )
     submitted = st.form_submit_button("Analyze")
 
 if submitted:
@@ -49,7 +55,7 @@ if submitted:
         signals = extract_signals(artifacts)
 
     with st.spinner("Running deep AI analysis (this can take a minute or two for a thorough report)..."):
-        verdict = analyze(signals)
+        verdict = analyze(signals, focus_area=focus_area.strip())
 
     st.divider()
     st.subheader("Result")
