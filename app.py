@@ -14,7 +14,7 @@ from analyzer import analyze
 
 st.set_page_config(page_title="Session Debug Copilot", page_icon="🔍", layout="centered")
 
-st.title("🔍 Session Debug Copilot")
+st.title("🔍 Session Debug Copilot2")
 st.caption("Paste a BrowserStack session ID, get an AI-grounded root-cause analysis.")
 
 with st.form("session_form"):
