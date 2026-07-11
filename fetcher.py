@@ -5,9 +5,11 @@ Nothing here parses or interprets data - it just retrieves raw artifacts.
 """
 
 import os
+import re
 import requests
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Tuple
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -43,6 +45,47 @@ class SessionArtifacts:
     fetch_errors: list = field(default_factory=list)
 
 
+class InvalidSessionUrlError(Exception):
+    pass
+
+
+def parse_session_url(url: str) -> Tuple[str, str, str]:
+    """
+    Parse a BrowserStack dashboard URL into (session_id, build_id, platform).
+
+    Expected shapes:
+      https://automate.browserstack.com/dashboard/v2/builds/<build_id>/sessions/<session_id>
+      https://app-automate.browserstack.com/dashboard/v2/builds/<build_id>/sessions/<session_id>
+    """
+    url = (url or "").strip()
+    if not url:
+        raise InvalidSessionUrlError("Session URL is required.")
+
+    parsed = urlparse(url)
+    host = parsed.netloc.lower()
+
+    if "app-automate" in host:
+        platform = "app_automate"
+    elif "automate" in host:
+        platform = "automate"
+    else:
+        raise InvalidSessionUrlError(
+            "Couldn't tell Automate from App Automate - expected the host to be "
+            "automate.browserstack.com or app-automate.browserstack.com, "
+            f"got: {parsed.netloc or url}"
+        )
+
+    match = re.search(r"/builds/([^/?#]+)/sessions/([^/?#]+)", parsed.path)
+    if not match:
+        raise InvalidSessionUrlError(
+            "Couldn't find /builds/<build_id>/sessions/<session_id> in that URL. "
+            "Paste the full session URL from the BrowserStack dashboard."
+        )
+
+    build_id, session_id = match.group(1), match.group(2)
+    return session_id, build_id, platform
+
+
 def _check_credentials():
     if not USERNAME or not ACCESS_KEY:
         raise BrowserStackAuthError(
@@ -65,22 +108,29 @@ def _get(url: str):
     return resp
 
 
-def fetch_session_metadata(session_id: str) -> dict:
-    """GET /automate/sessions/<session_id> - browser, os, status, reason, etc."""
-    url = f"{AUTOMATE_BASE}/sessions/{session_id}.json"
+def _base_for(platform: str) -> str:
+    return APP_AUTOMATE_BASE if platform == "app_automate" else AUTOMATE_BASE
+
+
+def fetch_session_metadata(session_id: str, platform: str = "automate") -> dict:
+    """GET <base>/sessions/<session_id>.json - browser, os, status, reason, etc."""
+    url = f"{_base_for(platform)}/sessions/{session_id}.json"
     resp = _get(url)
     return resp.json()
 
 
-def fetch_text_logs(session_id: str) -> str:
-    """GET /automate/sessions/<session_id>/logs - the main session/selenium text log."""
-    url = f"{AUTOMATE_BASE}/sessions/{session_id}/logs"
+def fetch_text_logs(session_id: str, platform: str = "automate") -> str:
+    """GET <base>/sessions/<session_id>/logs - the main session/appium/selenium text log."""
+    url = f"{_base_for(platform)}/sessions/{session_id}/logs"
     resp = _get(url)
     return resp.text
 
 
-def fetch_console_logs(session_id: str) -> str:
-    """GET /automate/sessions/<session_id>/consolelogs - JS console output (Chrome only)."""
+def fetch_console_logs(session_id: str, platform: str = "automate") -> str:
+    """GET /automate/sessions/<session_id>/consolelogs - JS console output (Chrome only).
+    Not applicable to App Automate (native apps have no JS console)."""
+    if platform == "app_automate":
+        return ""
     url = f"{AUTOMATE_BASE}/sessions/{session_id}/consolelogs"
     try:
         resp = _get(url)
@@ -90,9 +140,9 @@ def fetch_console_logs(session_id: str) -> str:
         return ""
 
 
-def fetch_network_logs(session_id: str) -> dict:
-    """GET /automate/sessions/<session_id>/networklogs - HAR formatted JSON."""
-    url = f"{AUTOMATE_BASE}/sessions/{session_id}/networklogs"
+def fetch_network_logs(session_id: str, platform: str = "automate") -> dict:
+    """GET <base>/sessions/<session_id>/networklogs - HAR formatted JSON."""
+    url = f"{_base_for(platform)}/sessions/{session_id}/networklogs"
     try:
         resp = _get(url)
         return resp.json()
@@ -124,10 +174,10 @@ def fetch_all(session_id: str, build_id: Optional[str] = None,
     artifacts = SessionArtifacts(session_id=session_id, build_id=build_id, platform=platform)
 
     steps = [
-        ("metadata", lambda: fetch_session_metadata(session_id)),
-        ("text_logs", lambda: fetch_text_logs(session_id)),
-        ("console_logs", lambda: fetch_console_logs(session_id)),
-        ("network_logs_har", lambda: fetch_network_logs(session_id)),
+        ("metadata", lambda: fetch_session_metadata(session_id, platform)),
+        ("text_logs", lambda: fetch_text_logs(session_id, platform)),
+        ("console_logs", lambda: fetch_console_logs(session_id, platform)),
+        ("network_logs_har", lambda: fetch_network_logs(session_id, platform)),
     ]
 
     if platform == "app_automate" and build_id:

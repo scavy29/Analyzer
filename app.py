@@ -8,7 +8,7 @@ Run with:  streamlit run app.py
 
 import streamlit as st
 
-from fetcher import fetch_all, BrowserStackAuthError
+from fetcher import fetch_all, parse_session_url, BrowserStackAuthError, InvalidSessionUrlError
 from parser import extract_signals
 from analyzer import analyze
 
@@ -18,28 +18,23 @@ st.title("🔍 Session Debug Copilot")
 st.caption("Paste a BrowserStack session ID, get an AI-grounded root-cause analysis.")
 
 with st.form("session_form"):
-    platform = st.radio(
-        "Session type",
-        options=["automate", "app_automate"],
-        format_func=lambda x: "Automate (web/Selenium)" if x == "automate" else "App Automate (mobile/device)",
-        horizontal=True,
-    )
-    session_id = st.text_input("Session ID", placeholder="e.g. a1b2c3d4e5...")
-    build_id = st.text_input(
-        "Build ID (required for App Automate device logs, optional otherwise)",
-        placeholder="e.g. f6g7h8i9...",
+    session_url = st.text_input(
+        "Session URL",
+        placeholder="https://automate.browserstack.com/dashboard/v2/builds/<build_id>/sessions/<session_id>",
     )
     submitted = st.form_submit_button("Analyze")
 
 if submitted:
-    if not session_id:
-        st.error("Session ID is required.")
+    try:
+        session_id, build_id, platform = parse_session_url(session_url)
+    except InvalidSessionUrlError as e:
+        st.error(str(e))
         st.stop()
 
     with st.spinner("Fetching logs from BrowserStack..."):
         try:
-            artifacts = fetch_all(session_id=session_id.strip(),
-                                   build_id=build_id.strip() or None,
+            artifacts = fetch_all(session_id=session_id,
+                                   build_id=build_id,
                                    platform=platform)
         except BrowserStackAuthError as e:
             st.error(f"Authentication error: {e}")
