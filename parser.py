@@ -52,10 +52,10 @@ class Signals:
             "os": self.os_name,
             "device": self.device,
             "exceptions_found": self.exceptions_found,
-            "js_console_errors": self.js_console_errors[:20],   # cap for prompt size
-            "failed_requests": self.failed_requests[:20],
-            "slow_requests": self.slow_requests[:10],
-            "device_log_errors": self.device_log_errors[:20],
+            "js_console_errors": self.js_console_errors[:100],
+            "failed_requests": self.failed_requests[:50],
+            "slow_requests": self.slow_requests[:30],
+            "device_log_errors": self.device_log_errors[:100],
             "fetch_errors": self.fetch_errors,
         }
 
@@ -80,7 +80,7 @@ def _parse_text_logs(signals: Signals, text_logs: str):
             end = min(len(text_logs), match.end() + 80)
             snippet = text_logs[start:end].replace("\n", " ").strip()
             signals.exceptions_found.append({"type": pattern, "context": snippet})
-            if len(signals.exceptions_found) >= 15:
+            if len(signals.exceptions_found) >= 50:
                 return
 
 

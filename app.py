@@ -53,7 +53,7 @@ if submitted:
     with st.spinner("Extracting structured signals..."):
         signals = extract_signals(artifacts)
 
-    with st.spinner("Running AI analysis..."):
+    with st.spinner("Running deep AI analysis (this can take a minute or two for a thorough report)..."):
         verdict = analyze(signals)
 
     st.divider()
@@ -70,15 +70,33 @@ if submitted:
     }
     st.markdown(f"### {category_labels.get(verdict.category, verdict.category)}")
     st.markdown(f"**Confidence:** {verdict.confidence}")
-    st.write(verdict.summary)
+    if verdict.confidence_reasoning:
+        st.caption(verdict.confidence_reasoning)
+    st.write(verdict.executive_summary)
+
+    if verdict.detailed_analysis:
+        st.markdown("### Detailed analysis")
+        st.markdown(verdict.detailed_analysis)
 
     if verdict.evidence:
-        st.markdown("**Evidence:**")
+        st.markdown("### Evidence")
         for e in verdict.evidence:
             st.markdown(f"- {e}")
 
-    st.markdown("**Suggested next step:**")
-    st.info(verdict.suggested_next_step)
+    if verdict.remediation_steps:
+        st.markdown("### Suggested remediation steps")
+        for i, step in enumerate(verdict.remediation_steps, start=1):
+            st.markdown(f"{i}. {step}")
+
+    if verdict.verification_steps:
+        st.markdown("### How to verify the fix")
+        for step in verdict.verification_steps:
+            st.markdown(f"- {step}")
+
+    if verdict.additional_logs_needed:
+        st.warning("More evidence would sharpen this diagnosis:")
+        for item in verdict.additional_logs_needed:
+            st.markdown(f"- {item}")
 
     if verdict.raw_error:
         with st.expander("Debug info"):
